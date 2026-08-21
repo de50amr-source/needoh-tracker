@@ -1,0 +1,9 @@
+{
+  "name": "NeeDoh Tracker",
+  "short_name": "NeeDoh",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f1221",
+  "theme_color": "#6c5ce7",
+  "icons": []
+}
