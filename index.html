@@ -100,15 +100,69 @@ const headers = (extra={}) => ({
   ...extra
 });
 
-async function sb(path, options={}) {
-  const res = await fetch(SUPABASE_URL + path, {
+async function refreshSupabaseSession() {
+  const stored = localStorage.getItem("needoh_session");
+  if (!stored) return false;
+
+  let session;
+  try {
+    session = JSON.parse(stored);
+  } catch {
+    localStorage.removeItem("needoh_session");
+    return false;
+  }
+
+  if (!session.refresh_token) return false;
+
+  const res = await fetch(SUPABASE_URL + "/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ refresh_token: session.refresh_token })
+  });
+
+  if (!res.ok) {
+    localStorage.removeItem("needoh_session");
+    accessToken = null;
+    profileId = null;
+    return false;
+  }
+
+  const refreshed = await res.json();
+  localStorage.setItem("needoh_session", JSON.stringify(refreshed));
+  accessToken = refreshed.access_token;
+  profileId = refreshed.user?.id || profileId;
+  return true;
+}
+
+async function sb(path, options={}, retry=true) {
+  let res = await fetch(SUPABASE_URL + path, {
     ...options,
     headers: headers(options.headers || {})
   });
+
+  if (res.status === 401 && retry) {
+    let body = "";
+    try { body = await res.clone().text(); } catch {}
+
+    // PGRST303 is PostgREST's JWT-expired response. Refresh and retry once.
+    if (
+      body.includes("PGRST303") ||
+      body.toLowerCase().includes("jwt expired") ||
+      body.toLowerCase().includes("token has expired")
+    ) {
+      const refreshed = await refreshSupabaseSession();
+      if (refreshed) return sb(path, options, false);
+    }
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`${res.status} ${text}`);
   }
+
   if (res.status === 204) return null;
   const text = await res.text();
   return text ? JSON.parse(text) : null;
@@ -116,15 +170,36 @@ async function sb(path, options={}) {
 
 async function ensureAnonymousUser() {
   const stored = localStorage.getItem("needoh_session");
+
   if (stored) {
     try {
       const s = JSON.parse(stored);
+
       if (s.access_token && s.user?.id) {
         accessToken = s.access_token;
         profileId = s.user.id;
-        return;
+
+        // Verify the token before using it. If expired, refresh it.
+        const verify = await fetch(SUPABASE_URL + "/auth/v1/user", {
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${accessToken}`
+          }
+        });
+
+        if (verify.ok) return;
+
+        if (s.refresh_token) {
+          const refreshed = await refreshSupabaseSession();
+          if (refreshed) return;
+        }
       }
     } catch {}
+
+    // Stored session is unusable.
+    localStorage.removeItem("needoh_session");
+    accessToken = null;
+    profileId = null;
   }
 
   const res = await fetch(SUPABASE_URL + "/auth/v1/signup", {
@@ -132,7 +207,12 @@ async function ensureAnonymousUser() {
     headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
     body:JSON.stringify({})
   });
-  if (!res.ok) throw new Error("Anonymous sign-in is not enabled yet in Supabase Auth.");
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error("Anonymous sign-in failed: " + text);
+  }
+
   const session = await res.json();
   localStorage.setItem("needoh_session", JSON.stringify(session));
   accessToken = session.access_token;
