@@ -8,36 +8,34 @@
   <title>NeeDoh Tracker</title>
   <style>
     :root{
-      --bg:#0f1221; --card:#191d31; --card2:#212642; --text:#f7f7fb; --muted:#aeb4c8;
-      --accent:#8b7cf6; --ok:#47d18c; --warn:#ffca5c; --danger:#ff6b81; --line:#303653;
+      --bg:#0f1221;--card:#191d31;--card2:#212642;--text:#f7f7fb;--muted:#aeb4c8;
+      --accent:#8b7cf6;--ok:#47d18c;--warn:#ffca5c;--danger:#ff6b81;--line:#303653
     }
     *{box-sizing:border-box}
     body{margin:0;background:linear-gradient(180deg,#111526,#0b0e19);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
     .wrap{max-width:900px;margin:auto;padding:18px 14px 90px}
-    h1{font-size:28px;margin:4px 0 4px}
+    h1{font-size:28px;margin:4px 0}
     .sub{color:var(--muted);margin-bottom:18px}
     .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
     .metric{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
     .metric b{display:block;font-size:24px}
-    .metric span{font-size:12px;color:var(--muted)}
+    .metric span,.meta{font-size:12px;color:var(--muted)}
     .tabs{display:flex;gap:8px;margin:18px 0;flex-wrap:wrap}
     button,.btn{border:0;border-radius:14px;padding:10px 14px;background:var(--card2);color:var(--text);font-weight:650;cursor:pointer}
     button.active{background:var(--accent)}
-    .panel{display:none}
-    .panel.active{display:block}
+    .panel{display:none} .panel.active{display:block}
     .toolbar{display:flex;gap:8px;margin-bottom:12px}
-    input,select{width:100%;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px}
+    input{width:100%;background:var(--card);border:1px solid var(--line);color:var(--text);border-radius:14px;padding:12px}
     .item{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin:10px 0}
     .name{font-weight:750}
-    .meta{font-size:12px;color:var(--muted);margin-top:4px}
     .statuses{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
     .status{font-size:12px;padding:7px 9px;border-radius:999px}
-    .owned{background:#16392b;color:#8ff0ba}
-    .wanted{background:#3a2e14;color:#ffd977}
-    .priority{background:#431e2a;color:#ff9eb1}
+    .owned{background:#16392b;color:#8ff0ba} .wanted{background:#3a2e14;color:#ffd977} .priority{background:#431e2a;color:#ff9eb1}
+    .selected{outline:2px solid white}
     .stock{border-left:4px solid var(--ok)}
-    .stock .buy{background:var(--ok);color:#0f1b14;text-decoration:none;display:inline-block;margin-top:9px;padding:9px 12px;border-radius:12px;font-weight:800}
-    .empty{padding:24px;color:var(--muted);text-align:center}
+    .buy{background:var(--ok);color:#0f1b14;text-decoration:none;display:inline-block;margin-top:9px;padding:9px 12px;border-radius:12px;font-weight:800}
+    .notice{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin:10px 0;color:var(--muted)}
+    .error{border-color:var(--danger);color:#ffb2bf}
     .footer{position:fixed;left:0;right:0;bottom:0;background:rgba(13,16,28,.96);border-top:1px solid var(--line);padding:10px 14px;text-align:center;color:var(--muted);font-size:12px;backdrop-filter:blur(8px)}
     @media(max-width:640px){.grid{grid-template-columns:1fr}.item{grid-template-columns:1fr}.statuses{justify-content:flex-start}}
   </style>
@@ -45,7 +43,9 @@
 <body>
   <div class="wrap">
     <h1>🧊 NeeDoh Tracker</h1>
-    <div class="sub">Track what you own, what you need, and what just came back in stock.</div>
+    <div class="sub">Your collection now saves to Supabase.</div>
+
+    <div id="connection" class="notice">Connecting to collection database…</div>
 
     <div class="grid">
       <div class="metric"><b id="ownedCount">0</b><span>Owned</span></div>
@@ -56,128 +56,211 @@
     <div class="tabs">
       <button class="active" data-tab="collection">Collection</button>
       <button data-tab="stock">Live Stock</button>
-      <button data-tab="people">Group</button>
+      <button data-tab="group">Group</button>
     </div>
 
     <section id="collection" class="panel active">
-      <div class="toolbar">
-        <input id="search" placeholder="Search NeeDoh..." />
-      </div>
+      <div class="toolbar"><input id="search" placeholder="Search NeeDoh..." /></div>
       <div id="collectionList"></div>
     </section>
 
     <section id="stock" class="panel">
+      <div class="notice">Real retailer monitoring is the next step. This tab now reads the <b>inventory</b> table from Supabase.</div>
       <div id="stockList"></div>
     </section>
 
-    <section id="people" class="panel">
+    <section id="group" class="panel">
       <div class="item">
-        <div>
-          <div class="name">Daniel</div>
-          <div class="meta">10 owned • Polar Glow Penguin = top priority</div>
-        </div>
-        <div class="statuses"><span class="status priority">🐧 Penguin Hunter</span></div>
+        <div><div class="name" id="profileName">Collector</div><div class="meta">This browser gets its own anonymous Supabase account.</div></div>
       </div>
-      <div class="item">
-        <div>
-          <div class="name">Group member profiles</div>
-          <div class="meta">In the hosted version, each person gets their own collection and ZIP code.</div>
-        </div>
-      </div>
+      <div class="notice">When someone opens your shared link on another phone, they get a separate collection automatically. Full usernames/logins can be added later.</div>
     </section>
   </div>
 
-  <div class="footer">MVP demo • inventory shown here is sample data until retailer checkers are connected</div>
+  <div class="footer">Supabase-connected MVP • stock checker backend coming next</div>
 
 <script>
-const items = [
-"Original NeeDoh","Atomic NeeDoh","Color Changing NeeDoh","Happy Snappy","Shaggy NeeDoh","Press-Doh","Good Vibes Only","Jelly Squish",
-"Nice Cube","Nice Cube Swirl","Color Change Cube","Nice Ice Baby","Nice Berg","Nice Berg Swirl",
-"Jelly Dohnut","Dohnuts","Dohnut Holes","Nice Cream Cone","Nice-sicle","Gumdrop","Peace o' Cake","Squeezza",
-"Cool Cats","Funky Pup","Dig' It Pig","Groovy Shroom","Gummy Bear",
-"Fuzz Ball Flower Power","Fuzz Ball Wonder Waves","Fuzz Ball Wild Cats",
-"Dream Drop","Mello Mallo","SplootSplat","Panic Pete",
-"Advent Calendar","Bunnies & Chicks","Color Change Squeeze Heart","Cool Cane","Ginger Glowman","Polar Glow Penguin","Squish N Flow Snow Globe","Sugar Skull Cats",
-"Rainboh","Super NeeDoh","Super NeeDoh Cool Cats","Super NeeDoh Fuzz Ball",
-"Teenie NeeDoh 3-Pack","Teenie NeeDoh Singles","Teenie NeeDoh Cool Cats","Teenie NeeDoh Funky Pup","Teenie NeeDoh Fuzz Ball",
-"Teenie Cool Kittens Multipack","Teenie Dohnut Hole Multipack","Teenie Fab Four Multipack","Teenie Fuzz Ball Multipack","Teenie Hot Shots Multipack","Teenie Nice Ice Baby Multipack","Teenie Quad Squad Multipack","Teenie Swirl Multipack"
-];
-
-const initialOwned = new Set([
-"Jelly Squish","Nice Cube","Nice Cube Swirl","Color Change Cube","Nice Ice Baby",
-"Gumdrop","Funky Pup","Fuzz Ball Flower Power","Dream Drop","Color Change Squeeze Heart"
-]);
-
+const SUPABASE_URL = "https://pkggxisfbvfazkgftfdy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_i55KtU10MBZfqp68uZN92A_OcNtGh-U";
+let accessToken = null;
+let profileId = null;
+let catalog = [];
 let state = {};
-items.forEach(n => state[n] = initialOwned.has(n) ? "owned" : "wanted");
-state["Polar Glow Penguin"] = "priority";
-state["Advent Calendar"] = "priority";
 
-const stock = [
-  {name:"Polar Glow Penguin", retailer:"Demo Toy Store", where:"Phoenix, AZ", price:"$9.99", mode:"Local pickup", url:"#"},
-  {name:"Advent Calendar", retailer:"Demo Online Retailer", where:"Ships to Arizona", price:"$29.99", mode:"Online", url:"#"}
-];
+const headers = (extra={}) => ({
+  apikey: SUPABASE_KEY,
+  Authorization: `Bearer ${accessToken || SUPABASE_KEY}`,
+  "Content-Type":"application/json",
+  ...extra
+});
 
-function updateCounts(){
+async function sb(path, options={}) {
+  const res = await fetch(SUPABASE_URL + path, {
+    ...options,
+    headers: headers(options.headers || {})
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${text}`);
+  }
+  if (res.status === 204) return null;
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function ensureAnonymousUser() {
+  const stored = localStorage.getItem("needoh_session");
+  if (stored) {
+    try {
+      const s = JSON.parse(stored);
+      if (s.access_token && s.user?.id) {
+        accessToken = s.access_token;
+        profileId = s.user.id;
+        return;
+      }
+    } catch {}
+  }
+
+  const res = await fetch(SUPABASE_URL + "/auth/v1/signup", {
+    method:"POST",
+    headers:{apikey:SUPABASE_KEY,"Content-Type":"application/json"},
+    body:JSON.stringify({})
+  });
+  if (!res.ok) throw new Error("Anonymous sign-in is not enabled yet in Supabase Auth.");
+  const session = await res.json();
+  localStorage.setItem("needoh_session", JSON.stringify(session));
+  accessToken = session.access_token;
+  profileId = session.user.id;
+}
+
+async function ensureProfile() {
+  const existing = await sb(`/rest/v1/profiles?id=eq.${profileId}&select=*`);
+  if (existing.length) return existing[0];
+
+  const display = localStorage.getItem("needoh_name") || "Collector";
+  await sb("/rest/v1/profiles", {
+    method:"POST",
+    headers:{Prefer:"return=representation"},
+    body:JSON.stringify({id:profileId, display_name:display})
+  });
+  return {id:profileId, display_name:display};
+}
+
+async function loadCatalogAndCollection() {
+  catalog = await sb("/rest/v1/needoh_catalog?select=id,name,category,is_seasonal&order=category.asc,name.asc");
+  const rows = await sb(`/rest/v1/collection_items?profile_id=eq.${profileId}&select=needoh_id,status`);
+
+  const byId = Object.fromEntries(rows.map(r => [String(r.needoh_id), r.status]));
+  state = {};
+  for (const item of catalog) state[item.id] = byId[String(item.id)] || "wanted";
+
+  if (!rows.length) {
+    const defaults = {
+      "Jelly Squish":"owned","Nice Cube":"owned","Nice Cube Swirl":"owned","Color Change Cube":"owned",
+      "Nice Ice Baby":"owned","Gumdrop":"owned","Funky Pup":"owned","Fuzz Ball Flower Power":"owned",
+      "Dream Drop":"owned","Color Change Squeeze Heart":"owned","Polar Glow Penguin":"priority","Advent Calendar":"priority"
+    };
+    const payload = catalog.map(item => ({profile_id:profileId,needoh_id:item.id,status:defaults[item.name] || "wanted"}));
+    await sb("/rest/v1/collection_items", {
+      method:"POST",
+      headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify(payload)
+    });
+    for (const item of catalog) state[item.id] = defaults[item.name] || "wanted";
+  }
+}
+
+async function saveStatus(itemId,status) {
+  state[itemId] = status;
+  renderCollection(); updateCounts();
+  try {
+    await sb("/rest/v1/collection_items?on_conflict=profile_id,needoh_id", {
+      method:"POST",
+      headers:{Prefer:"resolution=merge-duplicates,return=minimal"},
+      body:JSON.stringify({profile_id:profileId,needoh_id:Number(itemId),status})
+    });
+  } catch (e) {
+    showError("Could not save status: " + e.message);
+  }
+}
+
+function updateCounts() {
   const vals = Object.values(state);
   document.getElementById("ownedCount").textContent = vals.filter(v=>v==="owned").length;
   document.getElementById("wantedCount").textContent = vals.filter(v=>v==="wanted").length;
   document.getElementById("priorityCount").textContent = vals.filter(v=>v==="priority").length;
 }
 
-function renderCollection(){
+function renderCollection() {
   const q = document.getElementById("search").value.toLowerCase();
-  const list = document.getElementById("collectionList");
-  list.innerHTML = "";
-  items.filter(n=>n.toLowerCase().includes(q)).forEach(name=>{
+  const root = document.getElementById("collectionList");
+  root.innerHTML = "";
+  catalog.filter(i => i.name.toLowerCase().includes(q)).forEach(item => {
     const row = document.createElement("div");
     row.className="item";
     row.innerHTML = `
-      <div><div class="name">${name}</div><div class="meta">Authentic Schylling NeeDoh</div></div>
+      <div>
+        <div class="name">${item.name}</div>
+        <div class="meta">${item.category || "NeeDoh"}${item.is_seasonal ? " • Seasonal" : ""}</div>
+      </div>
       <div class="statuses">
-        <button class="status owned" data-name="${name}" data-status="owned">Owned</button>
-        <button class="status wanted" data-name="${name}" data-status="wanted">Wanted</button>
-        <button class="status priority" data-name="${name}" data-status="priority">Priority</button>
+        <button class="status owned ${state[item.id]==="owned"?"selected":""}" data-status="owned">Owned</button>
+        <button class="status wanted ${state[item.id]==="wanted"?"selected":""}" data-status="wanted">Wanted</button>
+        <button class="status priority ${state[item.id]==="priority"?"selected":""}" data-status="priority">Priority</button>
       </div>`;
-    row.querySelectorAll("button").forEach(btn=>{
-      if(state[name]===btn.dataset.status) btn.style.outline="2px solid white";
-      btn.addEventListener("click",()=>{
-        state[name]=btn.dataset.status; renderCollection(); updateCounts();
-      });
-    });
-    list.appendChild(row);
+    row.querySelectorAll("button").forEach(btn => btn.addEventListener("click", () => saveStatus(item.id, btn.dataset.status)));
+    root.appendChild(row);
   });
 }
 
-function renderStock(){
-  const list=document.getElementById("stockList");
-  list.innerHTML="";
-  stock.forEach(s=>{
-    const row=document.createElement("div");
-    row.className="item stock";
-    row.innerHTML=`
-      <div>
-        <div class="name">${s.name}</div>
-        <div class="meta">${s.retailer} • ${s.where} • ${s.mode}</div>
-        <div style="margin-top:5px;font-weight:800">${s.price}</div>
-        <a class="buy" href="${s.url}">View listing</a>
-      </div>
-      <div class="statuses"><span class="status priority">IN STOCK</span></div>`;
-    list.appendChild(row);
-  });
+async function loadStock() {
+  const root = document.getElementById("stockList");
+  root.innerHTML = "<div class='notice'>Checking live inventory table…</div>";
+  try {
+    const rows = await sb("/rest/v1/inventory?select=id,store_name,location,price,purchase_url,availability,stock_type,verified_at,needoh_catalog(name),retailers(name)&availability=neq.out_of_stock&order=verified_at.desc&limit=100");
+    root.innerHTML = "";
+    if (!rows.length) {
+      root.innerHTML = "<div class='notice'>No live retailer records yet. That’s expected until we connect the checker backend.</div>";
+      return;
+    }
+    for (const r of rows) {
+      const div=document.createElement("div"); div.className="item stock";
+      const product=r.needoh_catalog?.name || "NeeDoh";
+      const retailer=r.retailers?.name || r.store_name || "Retailer";
+      div.innerHTML = `<div><div class="name">${product}</div><div class="meta">${retailer} • ${r.location||r.stock_type||""}</div><div>${r.price!=null?"$"+Number(r.price).toFixed(2):""}</div>${r.purchase_url?`<a class="buy" href="${r.purchase_url}" target="_blank" rel="noopener">View listing</a>`:""}</div><div class="statuses"><span class="status owned">${r.availability||"available"}</span></div>`;
+      root.appendChild(div);
+    }
+  } catch(e) {
+    root.innerHTML = "<div class='notice error'>Could not load stock: "+e.message+"</div>";
+  }
+}
+
+function showError(msg) {
+  const box=document.getElementById("connection");
+  box.textContent=msg; box.classList.add("error");
 }
 
 document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>{
   document.querySelectorAll("[data-tab]").forEach(x=>x.classList.remove("active"));
   document.querySelectorAll(".panel").forEach(x=>x.classList.remove("active"));
-  b.classList.add("active");
-  document.getElementById(b.dataset.tab).classList.add("active");
+  b.classList.add("active"); document.getElementById(b.dataset.tab).classList.add("active");
+  if (b.dataset.tab==="stock") loadStock();
 }));
-
 document.getElementById("search").addEventListener("input",renderCollection);
 
-if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
-renderCollection(); renderStock(); updateCounts();
+(async () => {
+  try {
+    await ensureAnonymousUser();
+    const profile = await ensureProfile();
+    document.getElementById("profileName").textContent = profile.display_name || "Collector";
+    await loadCatalogAndCollection();
+    renderCollection(); updateCounts();
+    const box=document.getElementById("connection");
+    box.textContent="✓ Connected — collection changes now save to Supabase.";
+  } catch(e) {
+    showError(e.message);
+  }
+})();
 </script>
 </body>
 </html>
