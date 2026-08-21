@@ -32,7 +32,7 @@
     .status{font-size:12px;padding:7px 9px;border-radius:999px}
     .owned{background:#16392b;color:#8ff0ba} .wanted{background:#3a2e14;color:#ffd977} .priority{background:#431e2a;color:#ff9eb1}
     .selected{outline:2px solid white}
-    .stock{border-left:4px solid var(--ok)}
+    .stock{border-left:6px solid var(--ok);box-shadow:0 0 0 1px rgba(71,209,140,.18)} .stock .name{font-size:18px}
     .buy{background:var(--ok);color:#0f1b14;text-decoration:none;display:inline-block;margin-top:9px;padding:9px 12px;border-radius:12px;font-weight:800}
     .notice{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin:10px 0;color:var(--muted)}
     .error{border-color:var(--danger);color:#ffb2bf}
@@ -46,6 +46,12 @@
     <div class="sub">Your collection now saves to Supabase.</div>
 
     <div id="connection" class="notice">Connecting to collection database…</div>
+    <div class="notice">
+      <div class="name">📲 Priority stock alerts</div>
+      <div class="meta" style="margin-top:5px">Get a push notification when one of your Priority NeeDohs flips to IN STOCK.</div>
+      <button id="enableNotifications" style="margin-top:10px">Enable notifications</button>
+      <div id="notificationStatus" class="meta" style="margin-top:8px"></div>
+    </div>
 
     <div class="grid">
       <div class="metric"><b id="ownedCount">0</b><span>Owned</span></div>
@@ -195,7 +201,13 @@ function renderCollection() {
   const q = document.getElementById("search").value.toLowerCase();
   const root = document.getElementById("collectionList");
   root.innerHTML = "";
-  catalog.filter(i => i.name.toLowerCase().includes(q)).forEach(item => {
+  catalog
+    .filter(i => i.name.toLowerCase().includes(q))
+    .sort((a,b) => {
+      const rank = { priority: 0, wanted: 1, owned: 2 };
+      return (rank[state[a.id]] ?? 9) - (rank[state[b.id]] ?? 9) || a.name.localeCompare(b.name);
+    })
+    .forEach(item => {
     const row = document.createElement("div");
     row.className="item";
     row.innerHTML = `
@@ -283,6 +295,66 @@ document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()
   if (b.dataset.tab==="stock") loadStock();
 }));
 document.getElementById("search").addEventListener("input",renderCollection);
+
+
+const VAPID_PUBLIC_KEY = "BA_4bZcXGLOCE87YVUlAkXzIJulkPlFZ0PBaYOqolo6NY0RURx7gRHf3KFvUcyOCm_0ThFj2p9w_8FzP7hFXUiI";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(ch => ch.charCodeAt(0)));
+}
+
+async function enablePushNotifications() {
+  const status = document.getElementById("notificationStatus");
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    status.textContent = "Push isn't available here. On iPhone, install the tracker to your Home Screen first.";
+    return;
+  }
+  if (VAPID_PUBLIC_KEY.startsWith("REPLACE_")) {
+    status.textContent = "Push keys haven't been configured yet.";
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    status.textContent = "Notifications weren't allowed.";
+    return;
+  }
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+  await sb("/rest/v1/push_subscriptions?on_conflict=profile_id,endpoint", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({
+      profile_id: profileId,
+      endpoint: sub.endpoint,
+      subscription: sub.toJSON(),
+      enabled: true,
+      updated_at: new Date().toISOString()
+    })
+  });
+  status.textContent = "✓ Push alerts enabled on this device.";
+}
+
+document.getElementById("enableNotifications").addEventListener("click", () => {
+  enablePushNotifications().catch(err => {
+    document.getElementById("notificationStatus").textContent = "Push setup failed: " + err.message;
+  });
+});
+
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(err => {
+    console.error("Service worker registration failed:", err);
+  });
+}
 
 (async () => {
   try {
