@@ -65,7 +65,7 @@
     </section>
 
     <section id="stock" class="panel">
-      <div class="notice">Real retailer monitoring is the next step. This tab now reads the <b>inventory</b> table from Supabase.</div>
+      <div class="notice">Live retailer results from Supabase. This view includes in-stock, out-of-stock, and unknown results.</div>
       <div id="stockList"></div>
     </section>
 
@@ -77,7 +77,7 @@
     </section>
   </div>
 
-  <div class="footer">Supabase-connected MVP • stock checker backend coming next</div>
+  <div class="footer">Live stock backend connected • retailer checks update automatically</div>
 
 <script>
 const SUPABASE_URL = "https://pkggxisfbvfazkgftfdy.supabase.co";
@@ -215,24 +215,60 @@ function renderCollection() {
 
 async function loadStock() {
   const root = document.getElementById("stockList");
-  root.innerHTML = "<div class='notice'>Checking live inventory table…</div>";
+  root.innerHTML = "<div class='notice'>Loading latest retailer checks…</div>";
   try {
-    const rows = await sb("/rest/v1/inventory?select=id,store_name,location,price,purchase_url,availability,stock_type,verified_at,needoh_catalog(name),retailers(name)&availability=neq.out_of_stock&order=verified_at.desc&limit=100");
+    const rows = await sb("/rest/v1/inventory?select=id,store_name,location,price,purchase_url,availability,stock_type,verified_at,needoh_catalog(name),retailers(name)&order=verified_at.desc&limit=100");
     root.innerHTML = "";
     if (!rows.length) {
-      root.innerHTML = "<div class='notice'>No live retailer records yet. That’s expected until we connect the checker backend.</div>";
+      root.innerHTML = "<div class='notice'>No retailer checks have been written yet.</div>";
       return;
     }
+
     for (const r of rows) {
-      const div=document.createElement("div"); div.className="item stock";
-      const product=r.needoh_catalog?.name || "NeeDoh";
-      const retailer=r.retailers?.name || r.store_name || "Retailer";
-      div.innerHTML = `<div><div class="name">${product}</div><div class="meta">${retailer} • ${r.location||r.stock_type||""}</div><div>${r.price!=null?"$"+Number(r.price).toFixed(2):""}</div>${r.purchase_url?`<a class="buy" href="${r.purchase_url}" target="_blank" rel="noopener">View listing</a>`:""}</div><div class="statuses"><span class="status owned">${r.availability||"available"}</span></div>`;
+      const div = document.createElement("div");
+      const availability = r.availability || "unknown";
+      const isIn = availability === "in_stock";
+      const isOut = availability === "out_of_stock";
+      div.className = "item" + (isIn ? " stock" : "");
+
+      const product = r.needoh_catalog?.name || "NeeDoh";
+      const retailer = r.retailers?.name || r.store_name || "Retailer";
+      const checked = r.verified_at ? new Date(r.verified_at).toLocaleString() : "Unknown";
+
+      let statusLabel = "UNKNOWN";
+      let statusClass = "wanted";
+      if (isIn) {
+        statusLabel = "IN STOCK";
+        statusClass = "owned";
+      } else if (isOut) {
+        statusLabel = "OUT OF STOCK";
+        statusClass = "priority";
+      }
+
+      div.innerHTML = `
+        <div>
+          <div class="name">${product}</div>
+          <div class="meta">${retailer} • ${r.location || r.stock_type || ""}</div>
+          <div style="margin-top:6px">${r.price != null ? "$" + Number(r.price).toFixed(2) : ""}</div>
+          <div class="meta" style="margin-top:5px">Last checked: ${checked}</div>
+          ${r.purchase_url ? `<a class="buy" href="${r.purchase_url}" target="_blank" rel="noopener">View listing</a>` : ""}
+        </div>
+        <div class="statuses"><span class="status ${statusClass}">${statusLabel}</span></div>`;
       root.appendChild(div);
     }
   } catch(e) {
-    root.innerHTML = "<div class='notice error'>Could not load stock: "+e.message+"</div>";
+    root.innerHTML = "<div class='notice error'>Could not load stock: " + e.message + "</div>";
   }
+}
+
+let stockRefreshTimer = null;
+function startStockAutoRefresh() {
+  if (stockRefreshTimer) clearInterval(stockRefreshTimer);
+  stockRefreshTimer = setInterval(() => {
+    if (document.getElementById("stock").classList.contains("active")) {
+      loadStock();
+    }
+  }, 60000);
 }
 
 function showError(msg) {
@@ -254,7 +290,7 @@ document.getElementById("search").addEventListener("input",renderCollection);
     const profile = await ensureProfile();
     document.getElementById("profileName").textContent = profile.display_name || "Collector";
     await loadCatalogAndCollection();
-    renderCollection(); updateCounts();
+    renderCollection(); updateCounts(); startStockAutoRefresh();
     const box=document.getElementById("connection");
     box.textContent="✓ Connected — collection changes now save to Supabase.";
   } catch(e) {
